@@ -158,7 +158,7 @@ def detect(weights='yolov5s.pt',  # model.pt path(s)
                     cv2.imwrite(save_path, im0)
 
                     # gcsにアップロード
-                    storage_file_path = 'result/images/' + file_name
+                    storage_file_path = 'result/images/' + file_name + '.jpeg'
                     blob_gcs = gcp['bucket'].blob(storage_file_path)
                     result_image_file = save_path
                     blob_gcs.upload_from_filename(result_image_file)
