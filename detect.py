@@ -13,7 +13,7 @@ from utils.plots import colors, plot_one_box
 from utils.torch_utils import select_device, load_classifier, time_synchronized
 
 import firebase_admin
-from firebase_admin import storage
+from firebase_admin import storage, db
 
 @torch.no_grad()
 def detect(weights='yolov5s.pt',  # model.pt path(s)
@@ -40,7 +40,8 @@ def detect(weights='yolov5s.pt',  # model.pt path(s)
            hide_conf=False,  # hide confidences
            half=False,  # use FP16 half-precision inference
            gcp=None,
-           file_name=None
+           user_id=None,
+           timestamp=None,
            ):
     save_img = not nosave and not source.endswith('.txt')  # save inference images
     webcam = source.isnumeric() or source.endswith('.txt') or source.lower().startswith(
@@ -123,6 +124,12 @@ def detect(weights='yolov5s.pt',  # model.pt path(s)
                     n = (det[:, -1] == c).sum()  # detections per class
                     s += f"{n} {names[int(c)]}{'s' * (n > 1)}, "  # add to string
 
+                    # firebaseに検出結果を表示
+                    results_ref = db.reference('/results/' + user_id)
+                    results_ref.child(timestamp).update({
+                        names[int(c)]: n.item()
+                    })
+
                 # Write results
                 for *xyxy, conf, cls in reversed(det):
                     if save_txt:  # Write to file
@@ -132,7 +139,7 @@ def detect(weights='yolov5s.pt',  # model.pt path(s)
                             f.write(('%g ' * len(line)).rstrip() % line + '\n')
 
                         # gcsにアップロード
-                        storage_file_path = 'result/text/' + file_name + '.txt'
+                        storage_file_path = 'result/text/' + user_id + '/' + timestamp + '.txt'
                         blob_gcs = gcp['bucket'].blob(storage_file_path)
                         result_text_file = txt_path + '.txt'
                         blob_gcs.upload_from_filename(result_text_file)
@@ -158,7 +165,7 @@ def detect(weights='yolov5s.pt',  # model.pt path(s)
                     cv2.imwrite(save_path, im0)
 
                     # gcsにアップロード
-                    storage_file_path = 'result/images/' + file_name + '.jpeg'
+                    storage_file_path = 'result/images/' + user_id + '/' + timestamp +'.jpeg'
                     blob_gcs = gcp['bucket'].blob(storage_file_path)
                     result_image_file = save_path
                     blob_gcs.upload_from_filename(result_image_file)
@@ -216,23 +223,29 @@ def parse_opt():
     opt = parser.parse_args()
     return opt
 
-def download_blob(gcp, file_name):
+def download_blob(gcp, user_id, timestamp):
     storage_client = gcp['client']
     bucket = storage_client.bucket(os.getenv('FIREBASE_BUCKET'))
-    blob = bucket.blob('images/' + file_name + '.jpeg')
-    local_file = './data/download/' + file_name + '.jpeg'
+    bucket_file = 'images/' + user_id + '/' + timestamp + '.jpeg'
+    blob = bucket.blob(bucket_file)
+    if not os.path.exists('./data/download/'):
+        os.makedirs('./data/download/')
+    if not os.path.exists('./data/download/' + user_id):
+        os.makedirs('./data/download/' + user_id)
+    local_file = './data/download/' + user_id + '/' + timestamp + '.jpeg'
     blob.download_to_filename(local_file)
 
-def main(gcp, file_name):
-    download_blob(gcp, file_name)
+def main(gcp, user_id, timestamp):
+    download_blob(gcp, user_id, timestamp)
     opt = parse_opt()
     print(colorstr('detect: ') + ', '.join(f'{k}={v}' for k, v in vars(opt).items()))
     # gcpからdownloadした画像情報を解析するためパスを変更
-    opt.source = 'data/download/' + file_name + '.jpeg'
+    opt.source = 'data/download/' + user_id + '/' + timestamp + '.jpeg'
     # text出力をON
     opt.save_txt = True
     opt.gcp = gcp
-    opt.file_name = file_name
+    opt.user_id = user_id
+    opt.timestamp = timestamp
     check_requirements(exclude=('tensorboard', 'thop'))
     detect(**vars(opt))
 

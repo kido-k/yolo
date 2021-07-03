@@ -48,11 +48,24 @@ gcp = {
 def hello():
     return "Hello world!!"
 
+@app.route('/download', methods=['POST'])
+def download():
+    post_data = request.json
+    user_id = post_data['userId']
+    timestamp = post_data['timestamp']
+    print('user_id')
+    print(user_id)
+    print('timestamp')
+    print(timestamp)
+    detect.download_blob(gcp, user_id, timestamp)
+    return "OK"
+
 @app.route('/predict', methods=['POST'])
 def predict():
     post_data = request.json
-    fingerprint = post_data['fingerprint']
-    detect.main(gcp, fingerprint)
+    user_id = post_data['userId']
+    timestamp = post_data['timestamp']
+    detect.main(gcp, user_id, timestamp)
     return "OK"
 
 if __name__ == '__main__':
