@@ -15,6 +15,8 @@ import detect
 # .env ファイルをロードして環境変数へ反映
 load_dotenv()
 
+mode = os.getenv('MODE')
+
 app = Flask(__name__)
 app.config['CORS_HEADERS'] = 'Content-Type'
 CORS(app, resources={r"/*": {"origins": "*"}})
@@ -44,7 +46,7 @@ gcp = {
     'bucket': bucket
 }
 
-@app.route('/', methods=['POST'])
+@app.route('/')
 def hello():
     return "Hello world!!"
 
@@ -53,10 +55,6 @@ def download():
     post_data = request.json
     user_id = post_data['userId']
     timestamp = post_data['timestamp']
-    print('user_id')
-    print(user_id)
-    print('timestamp')
-    print(timestamp)
     detect.download_blob(gcp, user_id, timestamp)
     return "OK"
 
@@ -69,4 +67,12 @@ def predict():
     return "OK"
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    if mode == 'local':
+        app.run(host='0.0.0.0', port=5000, debug=True)
+    else:
+        import ssl
+        ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
+        ssl_context.load_cert_chain(
+            'fullchain.pem', 'privkey.pem'
+        )
+        app.run(host='0.0.0.0', ssl_context=ssl_context, port=5000)
